@@ -4,11 +4,7 @@
 summary of changes at the SVN filesystem level, without diffs or log
 messages.
 '''
-import sys, re
-
-recognizer = re.compile(
-    r'^(?:Revision-number: (?P<revnum>[0-9]+))|(?:Node-(?P<nodething>))$'
-)
+import sys
 
 def chop(s, prefix):
     return s[len(prefix):].rstrip() if s.startswith(prefix) else None
