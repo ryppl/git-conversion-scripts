@@ -1,0 +1,128 @@
+#!/usr/bin/env python
+
+'''Pipe in the output of "svnadmin dump" and get out a human readable
+summary of changes at the SVN filesystem level, without diffs or log
+messages.
+'''
+import sys, re
+
+recognizer = re.compile(
+    r'^(?:Revision-number: (?P<revnum>[0-9]+))|(?:Node-(?P<nodething>))$'
+)
+
+def chop(s, prefix):
+    return s[len(prefix):].rstrip() if s.startswith(prefix) else None
+
+class Revision(object):
+    def __init__(self, **kw):
+        for k,v in kw.items():
+            setattr(self, k, v)
+        self.paths = {}
+        self.node_info = None
+
+    def format_node_path(self, key):
+        path = self.node_info.get(key)
+        if not path:
+            return None
+        kind = self.node_info.get('kind')
+        if kind is None:
+            return path + ' </?>'
+        elif kind == 'file':
+            assert not path.endswith('/')
+        else:
+            assert kind == 'dir'
+            if not path.endswith('/'):
+                return path + '/'
+        return path
+
+    def open_node(self, path):
+        assert self.node_info is None, "failed to close open node"
+        self.node_info = dict(path=path)
+        
+    def close_node(self):
+        if self.node_info is None:
+            return
+
+        # print '## closing node in rev', self.revnum, self.node_info
+        sys.stdout.flush()
+        action = self.node_info['action']
+
+        # is this actually a copy?
+        src_path = self.format_node_path('copyfrom-path')
+        if src_path:
+            assert action == 'add'
+            src_rev = self.node_info['copyfrom-rev']
+            dst_path = self.format_node_path('path')
+            description = 'cp %s%s\t=>\t%s' % (
+                '' if int(src_rev) == int(self.revnum) - 1 else 'r%s:' % src_rev,
+                src_path,
+                dst_path
+            )
+            self.paths.setdefault(src_path,[]).append(description)
+        else:
+            path = self.format_node_path('path')
+            path_info = self.paths.setdefault(path,[])
+            if action == 'delete' and len(path_info) != 0 and path_info[-1].startswith('cp '):
+                copy_remainder = chop(path_info[-1], 'cp ')
+                path_info[-1] = 'mv ' + copy_remainder
+            else:
+                path_info.append(
+                    dict(add=' +', delete=' -', change=' ~', replace='-+')[action] + ' ' + path
+                )
+        self.node_info = None
+
+    def summarize(self):
+        self.close_node()
+        if len(self.paths) > 0:
+            print 'r' + self.revnum
+            for p in sorted(self.paths.keys()):
+                actions = self.paths[p]
+                if len(actions) == 1:
+                    print '  ' + actions[0]
+                else:
+                    print '  ['
+                    for x in actions:
+                        print '    ' + x
+                    print '  ]'
+
+def run():
+    lines = iter(sys.stdin)
+    last_rev = Revision()
+    state = 'after-blank'
+    follows_blank = False
+    for line in lines:
+        # print '#', state, repr(line[:60].rstrip())
+        if line == '\n': 
+            last_rev.close_node()
+            state = 'after-blank'
+        elif state == 'seek-blank':
+            continue
+        elif state == 'after-blank':
+            revnum = chop(line, 'Revision-number: ')
+            if revnum:
+                last_rev.summarize()
+                last_rev = Revision(revnum=revnum)
+                state = 'seek-blank'
+            else:
+                path = chop(line, 'Node-path: ')
+                if path:
+                    last_rev.open_node(path)
+                    state = 'in-node'
+                else:
+                    state = 'seek-blank'
+
+        elif state == 'in-node':
+            node_rest = chop(line, 'Node-')
+            if node_rest:
+                k,v = node_rest.split(': ', 1)
+                # print '# *', k, '=', v
+                last_rev.node_info[k] = v
+            else:
+                state = 'seek-blank'
+        else:
+            assert(not 'known state')
+
+    last_rev.summarize()
+            
+if __name__ == '__main__':
+    run()
