@@ -26,6 +26,7 @@ class Revision(object):
             return None
         kind = self.node_info.get('kind')
         if kind is None:
+            # strangely, deletions often appear to be missing a Node-kind field.
             return path + ' </?>'
         elif kind == 'file':
             assert not path.endswith('/')
@@ -46,13 +47,13 @@ class Revision(object):
         # print '## closing node in rev', self.revnum, self.node_info
         sys.stdout.flush()
         action = self.node_info['action']
+        dst_path = self.format_node_path('path')
 
         # is this actually a copy?
         src_path = self.format_node_path('copyfrom-path')
         if src_path:
             assert action == 'add'
             src_rev = self.node_info['copyfrom-rev']
-            dst_path = self.format_node_path('path')
             description = 'cp %s%s\t=>\t%s' % (
                 '' if int(src_rev) == int(self.revnum) - 1 else 'r%s:' % src_rev,
                 src_path,
@@ -60,14 +61,14 @@ class Revision(object):
             )
             self.paths.setdefault(src_path,[]).append(description)
         else:
-            path = self.format_node_path('path')
-            path_info = self.paths.setdefault(path,[])
+            path_info = self.paths.setdefault(dst_path,[])
             if action == 'delete' and len(path_info) != 0 and path_info[-1].startswith('cp '):
                 copy_remainder = chop(path_info[-1], 'cp ')
                 path_info[-1] = 'mv ' + copy_remainder
             else:
                 path_info.append(
-                    dict(add=' +', delete=' -', change=' ~', replace='-+')[action] + ' ' + path
+                    dict(add=' +', delete=' -', change=' ~', replace='-+')[action] 
+                    + ' ' + dst_path
                 )
         self.node_info = None
 
