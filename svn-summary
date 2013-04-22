@@ -31,17 +31,17 @@ class Revision(object):
         if not path:
             return None
         kind = self.node_info.get('kind')
-        fmt = '/%s'
+        fmt = '/{}'
         if kind is None:
             # strangely, deletions often appear to be missing a Node-kind field.
-            fmt = '/%s </?>'
+            fmt = '/{}/?'
         elif kind == 'file':
             assert not path.endswith('/')
         else:
             assert kind == 'dir'
             if not path.endswith('/'):
-                fmt = '/%s/'
-        return fmt % path
+                fmt = '/{}/'
+        return fmt.format(path)
 
     def open_node(self, path):
         assert self.node_info is None, "failed to close open node"
