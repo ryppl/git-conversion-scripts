@@ -119,17 +119,19 @@ class Revision(object):
                 src=
                   '' if src_prefix is None 
                   else '<= {}...@{}'.format(
-                          src_prefix, common_revnum if common_revnum >= 0 else '?'))
+                          src_prefix, common_revnum if common_revnum >= 0 else '...'))
 
             for p in sorted(self.paths.keys()):
                 actions = self.paths[p]
-                if len(actions) == 1:
-                    print '  %s' % actions[0]
-                else:
-                    print '  ['
-                    for x in actions:
-                        print '    %s' % x
-                    print '  ]'
+                for i,a in enumerate(actions):
+                    tgt = a['tgt'] if i == 0 else '"'
+                    print '  {act} {tgt}{fill_src}'.format(
+                        act=a['act'],
+                        tgt=tgt,
+                        fill_src = ((' ' * (tgt_max_length - len(tgt))
+                                    + ' <= {src}@{rev}'.format(**a))
+                                 if 'src' in a 
+                                 else ''))
 
 def run():
     lines = iter(sys.stdin)
