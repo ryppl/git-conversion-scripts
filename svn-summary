@@ -62,11 +62,11 @@ class Revision(object):
             assert action == 'add'
             src_rev = self.node_info['copyfrom-rev']
 
-            self.paths.setdefault(src_path,[]).append(
+            self.paths.setdefault(src_path.rstrip('/?'),[]).append(
                 dict(act='cp', src=src_path, rev=src_rev, tgt=dst_path)
             )
         else:
-            path_info = self.paths.setdefault(dst_path,[])
+            path_info = self.paths.setdefault(dst_path.rstrip('/?'),[])
             if action == 'delete' and len(path_info) != 0 and path_info[-1]['act'] == 'cp':
                 path_info[-1]['act'] = 'mv'
             else:
