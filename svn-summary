@@ -107,37 +107,49 @@ class Revision(object):
             src_prefix = src_prefix[:src_prefix.rfind('/')+1]
         return tgt_prefix,src_prefix,common_revnum,tgt_max_length
 
-    def summarize(self):
+    def summarize(self, verbosity=None):
         self.close_node()
-        if len(self.paths) > 0:
-            
+        path_cnt = len(self.paths)
+        if path_cnt == 0:
+            return
+        elif path_cnt > 1:
             tgt_prefix,src_prefix,common_revnum,tgt_max_length = self.scan()
-
             print 'r{rev} {{ {tgt}... {src}}}'.format(
-                rev=self.revnum, 
+                rev=self.revnum,
                 tgt=tgt_prefix,
                 src=
                   '' if src_prefix is None 
                   else '<= {}...@{}'.format(
                           src_prefix, common_revnum if common_revnum >= 0 else '...'))
+        else:
+            tgt_prefix,src_prefix,common_revnum = '','',-1
+            tgt_max_length = len(self.paths.keys()[0])  if len(self.paths) == 1 else 0
+            print 'r{}'.format(self.revnum)
 
-            for p in sorted(self.paths.keys()):
-                actions = self.paths[p]
-                for i,a in enumerate(actions):
-                    tgt = a['tgt'] if i == 0 else '"'
-                    print '  {act} {tgt}{fill_src}'.format(
-                        act=a['act'],
-                        tgt=tgt,
-                        fill_src = ((' ' * (tgt_max_length - len(tgt))
-                                    + ' <= {src}@{rev}'.format(**a))
-                                 if 'src' in a 
-                                 else ''))
+        # How much to chop off the front of source and target paths?
+        tgt_chop = len(tgt_prefix) if not verbosity else 0
+        src_chop = len(src_prefix) if src_prefix and not verbosity else 0
+
+        for p in sorted(self.paths.keys()):
+            actions = self.paths[p]
+            for i,a in enumerate(actions):
+                tgt = a['tgt'][tgt_chop:] if i == 0 else '"'
+                src_ = a['src'][src_chop:] + '@' + a['rev'] if 'src' in a else None
+
+                print '  {act} {tgt}{fill_src}'.format(
+                    act=a['act'],
+                    tgt=tgt,
+                    fill_src = ' ' * (tgt_max_length - len(tgt) - tgt_chop)
+                                + ' <= {src_}'.format(src_=src_)
+                             if src_
+                             else '')
 
 def run():
     lines = iter(sys.stdin)
     last_rev = Revision()
     state = 'after-blank'
     follows_blank = False
+    verbosity = '-v' in sys.argv
     for line in lines:
         # print '#', state, repr(line[:60].rstrip())
         if line == '\n': 
@@ -148,7 +160,7 @@ def run():
         elif state == 'after-blank':
             revnum = chop(line, 'Revision-number: ')
             if revnum:
-                last_rev.summarize()
+                last_rev.summarize(verbosity)
                 last_rev = Revision(revnum=revnum)
                 state = 'seek-blank'
             else:
@@ -170,7 +182,7 @@ def run():
         else:
             assert(not 'known state')
 
-    last_rev.summarize()
+    last_rev.summarize(verbosity)
             
 if __name__ == '__main__':
     run()
