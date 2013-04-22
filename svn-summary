@@ -101,6 +101,10 @@ class Revision(object):
                         a['rev'] if common_revnum is None or common_revnum == a['rev']
                         else -1)
 
+        # Truncate source and target prefixes on directory boundaries
+        tgt_prefix = tgt_prefix[:tgt_prefix.rfind('/')+1]
+        if src_prefix is not None:
+            src_prefix = src_prefix[:src_prefix.rfind('/')+1]
         return tgt_prefix,src_prefix,common_revnum,tgt_max_length
 
     def summarize(self):
