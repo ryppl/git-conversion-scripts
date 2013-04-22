@@ -113,7 +113,13 @@ class Revision(object):
             
             tgt_prefix,src_prefix,common_revnum,tgt_max_length = self.scan()
 
-            print 'r' + self.revnum, (tgt_prefix,src_prefix,common_revnum)
+            print 'r{rev} {{ {tgt}... {src}}}'.format(
+                rev=self.revnum, 
+                tgt=tgt_prefix,
+                src=
+                  '' if src_prefix is None 
+                  else '<= {}...@{}'.format(
+                          src_prefix, common_revnum if common_revnum >= 0 else '?'))
 
             for p in sorted(self.paths.keys()):
                 actions = self.paths[p]
