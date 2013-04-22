@@ -9,6 +9,16 @@ import sys
 def chop(s, prefix):
     return s[len(prefix):].rstrip() if s.startswith(prefix) else None
 
+# Thanks to http://stackoverflow.com/a/9114923/125349
+def common_prefix(a,b):
+    return  a[:([x[0]==x[1] for x in zip(a,b)]+[0]).index(0)]
+
+def accum_prefix(accum, s):
+    return s if accum is None else common_prefix(accum,s)
+
+def max(a, b):
+    return b if a < b else a
+
 class Revision(object):
     def __init__(self, **kw):
         for k,v in kw.items():
@@ -50,36 +60,64 @@ class Revision(object):
         if src_path:
             assert action == 'add'
             src_rev = self.node_info['copyfrom-rev']
-            description = 'cp %s%s\t=>\t%s' % (
-                '' if int(src_rev) == int(self.revnum) - 1 else 'r%s:' % src_rev,
-                src_path,
-                dst_path
+
+            self.paths.setdefault(src_path,[]).append(
+                dict(act='cp', src=src_path, rev=src_rev, tgt=dst_path)
             )
-            self.paths.setdefault(src_path,[]).append(description)
         else:
             path_info = self.paths.setdefault(dst_path,[])
-            if action == 'delete' and len(path_info) != 0 and path_info[-1].startswith('cp '):
-                copy_remainder = chop(path_info[-1], 'cp ')
-                path_info[-1] = 'mv ' + copy_remainder
+            if action == 'delete' and len(path_info) != 0 and path_info[-1]['act'] == 'cp':
+                path_info[-1]['act'] = 'mv'
             else:
                 path_info.append(
-                    dict(add=' +', delete=' -', change=' ~', replace='-+')[action] 
-                    + ' ' + dst_path
+                    dict(
+                        act=dict(add=' +', delete=' -', change=' ~', replace='-+')[action],
+                        tgt=dst_path)
                 )
         self.node_info = None
+
+    def scan(self):
+        '''Return a tuple containing:
+         - the longest common prefix of all target paths
+         - the longest common prefix of all source paths (or None)
+         - the single source revision number involved
+         - the maximum length of all target paths
+        '''
+        tgt_prefix = None
+        src_prefix = None
+        common_revnum = None
+        tgt_max_length = 0
+
+        for actions in self.paths.values():
+            for a in actions:
+                tgt = a['tgt']
+                tgt_max_length = max(tgt_max_length, len(tgt))
+                tgt_prefix = accum_prefix(tgt_prefix, tgt)
+                if a.get('src'):
+                    src_prefix = accum_prefix(src_prefix, a['src'])
+                if a.get('rev'):
+                    common_revnum = (
+                        a['rev'] if common_revnum is None or common_revnum == a['rev']
+                        else -1)
+
+        return tgt_prefix,src_prefix,common_revnum,tgt_max_length
 
     def summarize(self):
         self.close_node()
         if len(self.paths) > 0:
-            print 'r' + self.revnum
+            
+            tgt_prefix,src_prefix,common_revnum,tgt_max_length = self.scan()
+
+            print 'r' + self.revnum, (tgt_prefix,src_prefix,common_revnum)
+
             for p in sorted(self.paths.keys()):
                 actions = self.paths[p]
                 if len(actions) == 1:
-                    print '  ' + actions[0]
+                    print '  %s' % actions[0]
                 else:
                     print '  ['
                     for x in actions:
-                        print '    ' + x
+                        print '    %s' % x
                     print '  ]'
 
 def run():
